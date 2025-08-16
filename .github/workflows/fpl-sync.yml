@@ -2,11 +2,11 @@ name: Sync FPL Data
 
 on:
   schedule:
-    - cron: "0 * * * *"   # hourly
-  workflow_dispatch:
+    - cron: "0 * * * *"   # Runs once per hour
+  workflow_dispatch:       # Allow manual trigger
 
 permissions:
-  contents: write   # ✅ allow commits
+  contents: write
 
 jobs:
   fetch-and-commit:
@@ -21,10 +21,26 @@ jobs:
       - name: Fetch FPL fixtures
         run: curl -s https://fantasy.premierleague.com/api/fixtures/ -o fixtures.json
 
+      - name: Get current GW number
+        id: gw
+        run: |
+          CURRENT_GW=$(jq -r '.events[] | select(.is_current==true) | .id' bootstrap-static.json)
+          echo "gw=$CURRENT_GW" >> $GITHUB_OUTPUT
+
+      - name: Fetch Live Points for current GW
+        run: |
+          if [ -n "${{ steps.gw.outputs.gw }}" ]; then
+            curl -s "https://fantasy.premierleague.com/api/event/${{ steps.gw.outputs.gw }}/live/" -o live.json
+            curl -s "https://fantasy.premierleague.com/api/fixtures/?event=${{ steps.gw.outputs.gw }}" -o fixtures-current.json
+          else
+            echo "{}" > live.json
+            echo "[]" > fixtures-current.json
+          fi
+
       - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bootstrap-static.json fixtures.json
+          git add bootstrap-static.json fixtures.json live.json fixtures-current.json
           git diff --quiet && git diff --staged --quiet || git commit -m "Update FPL data"
           git push
