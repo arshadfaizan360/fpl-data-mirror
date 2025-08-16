@@ -1,0 +1,27 @@
+name: Sync FPL Data
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # Runs once per hour
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Fetch FPL bootstrap data
+        run: curl -s https://fantasy.premierleague.com/api/bootstrap-static/ -o bootstrap-static.json
+
+      - name: Fetch FPL fixtures
+        run: curl -s https://fantasy.premierleague.com/api/fixtures/ -o fixtures.json
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bootstrap-static.json fixtures.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update FPL data"
+          git push
